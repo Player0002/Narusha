@@ -1,0 +1,551 @@
+#include <Arduino.h>
+
+#define X_DIR 0x20	   // C
+#define X_STEP 0x80	   //D
+#define X_STOP 0x04	   // C
+#define XYEENABLE 0x40 // D
+
+#define Y_DIR 0x80	// DDRC 0x80
+#define Y_STEP 0x40 //DDRC 0x40
+#define Y_STOP 0x08 // DDRC 0x08
+
+#define ONE_MM 80
+#define ONE_CM 800
+
+#define X_LEFT PORTC | X_DIR
+#define X_RIGHT PORTC & ~(X_DIR)
+
+#define Y_UP PORTC | Y_DIR
+#define Y_DOWN PORTC & ~(Y_DIR)
+
+ int xy_speed[205][2] = {};
+const float xy_pos[205][2] = {
+66.268 , 82.377,
+66.527 , 82.217,
+66.796 , 82.073,
+67.072 , 81.946,
+67.356 , 81.836,
+67.647 , 81.743,
+67.942 , 81.669,
+68.241 , 81.613,
+68.544 , 81.576,
+68.848 , 81.557,
+131.152, 81.557,
+131.456, 81.576,
+131.759, 81.613,
+132.058, 81.669,
+132.353, 81.743,
+132.644, 81.836,
+132.928, 81.946,
+133.204, 82.073,
+133.473, 82.217,
+133.732, 82.377,
+133.980, 82.553,
+134.218, 82.744,
+134.443, 82.950,
+134.655, 83.168,
+134.853, 83.400,
+135.036, 83.643,
+135.205, 83.897,
+135.357, 84.160,
+135.493, 84.433,
+135.611, 84.714,
+135.713, 85.001,
+135.796, 85.294,
+135.861, 85.591,
+135.908, 85.892,
+135.936, 86.196,
+135.945, 86.500,
+135.936, 86.804,
+135.908, 87.108,
+135.861, 87.409,
+135.796, 87.706,
+135.713, 87.999,
+135.611, 88.286,
+135.493, 88.567,
+135.357, 88.840,
+135.205, 89.103,
+135.036, 89.357,
+134.853, 89.600,
+134.664, 89.821,
+134.225, 90.251,
+103.227, 117.248,
+102.980, 117.446,
+102.732, 117.622,
+102.473, 117.783,
+102.204, 117.927,
+101.928, 118.054,
+101.644, 118.164,
+101.353, 118.257,
+101.058, 118.331,
+100.759, 118.387,
+100.456, 118.424,
+100.152, 118.443,
+99.848 , 118.443,
+99.544 , 118.424,
+99.241 , 118.387,
+98.942 , 118.331,
+98.647 , 118.257,
+98.356 , 118.164,
+98.072 , 118.054,
+97.796 , 117.927,
+97.527 , 117.783,
+97.268 , 117.622,
+97.021 , 117.447,
+96.737 , 117.217,
+65.775 , 90.251,
+65.336 , 89.821,
+65.147 , 89.600,
+64.964 , 89.357,
+64.795 , 89.103,
+64.643 , 88.840,
+64.507 , 88.567,
+64.389 , 88.286,
+64.287 , 87.999,
+64.204 , 87.706,
+64.139 , 87.409,
+64.092 , 87.108,
+64.064 , 86.804,
+64.055 , 86.500,
+64.064 , 86.196,
+64.092 , 85.892,
+64.139 , 85.591,
+64.204 , 85.294,
+64.287 , 85.001,
+64.389 , 84.714,
+64.507 , 84.433,
+64.643 , 84.160,
+64.795 , 83.897,
+64.964 , 83.643,
+65.147 , 83.400,
+65.345 , 83.168,
+65.557 , 82.950,
+65.782 , 82.745,
+66.020 , 82.553,
+65.586 , 81.979,
+65.870 , 81.777,
+66.167 , 81.593,
+66.475 , 81.428,
+66.792 , 81.282,
+67.117 , 81.156,
+67.449 , 81.051,
+67.788 , 80.965,
+68.131 , 80.901,
+68.477 , 80.858,
+68.826 , 80.837,
+131.174, 80.837,
+131.523, 80.858,
+131.869, 80.901,
+132.212, 80.965,
+132.551, 81.051,
+132.883, 81.156,
+133.208, 81.282,
+133.525, 81.428,
+133.833, 81.593,
+134.130, 81.777,
+134.414, 81.979,
+134.686, 82.197,
+134.944, 82.433,
+135.187, 82.683,
+135.414, 82.948,
+135.624, 83.227,
+135.817, 83.517,
+135.992, 83.820,
+136.147, 84.132,
+136.283, 84.453,
+136.399, 84.782,
+136.495, 85.118,
+136.569, 85.459,
+136.623, 85.804,
+136.655, 86.151,
+136.666, 86.500,
+136.655, 86.849,
+136.623, 87.196,
+136.569, 87.541,
+136.495, 87.882,
+136.399, 88.218,
+136.283, 88.547,
+136.147, 88.868,
+135.992, 89.180,
+135.817, 89.483,
+135.624, 89.773,
+135.414, 90.052,
+135.190, 90.313,
+134.714, 90.780,
+103.689, 117.800,
+103.414, 118.021,
+103.130, 118.223,
+102.833, 118.407,
+102.525, 118.572,
+102.208, 118.718,
+101.883, 118.844,
+101.551, 118.949,
+101.212, 119.035,
+100.869, 119.099,
+100.523, 119.142,
+100.174, 119.163,
+99.826 , 119.163,
+99.477 , 119.142,
+99.131 , 119.099,
+98.788 , 119.035,
+98.449 , 118.949,
+98.117 , 118.844,
+97.792 , 118.718,
+97.475 , 118.572,
+97.167 , 118.407,
+96.870 , 118.223,
+96.586 , 118.022,
+96.274 , 117.769,
+65.286 , 90.780,
+64.810 , 90.313,
+64.586 , 90.052,
+64.376 , 89.773,
+64.183 , 89.483,
+64.008 , 89.180,
+63.853 , 88.868,
+63.717 , 88.547,
+63.601 , 88.218,
+63.505 , 87.882,
+63.431 , 87.541,
+63.377 , 87.196,
+63.345 , 86.849,
+63.334 , 86.500,
+63.345 , 86.151,
+63.377 , 85.804,
+63.431 , 85.459,
+63.505 , 85.118,
+63.601 , 84.782,
+63.717 , 84.453,
+63.853 , 84.132,
+64.008 , 83.820,
+64.183 , 83.517,
+64.376 , 83.227,
+64.586 , 82.948,
+64.813 , 82.683,
+65.056 , 82.433,
+65.314 , 82.197,
+65.586 , 81.979
+}; 
+enum
+{
+	x_left,
+	x_right,
+	y_up,
+	y_down
+};
+
+volatile char is_x_reset = 0;
+int x_distance = 0;
+
+volatile char is_y_reset = 0;
+int y_distance = 0;
+
+double off_y = 0;
+double off_x = 0;
+
+double ANGLE(int x)
+{
+	return (PI * x) / 180.0;
+}
+
+int x_locs[7] = {15, 45, 60, 45, 15, 0, 15};
+int y_locs[7] = {15, 15, 15 + (int)((sqrt(3) / 2.0) * 30), 15 + 2 * (int)((sqrt(3) / 2.0) * 30), 15 + 2 * (int)((sqrt(3) / 2.0) * 30), 15 + (int)((sqrt(3) / 2.0) * 30), 15};
+
+int xs[90] = {};
+int ys[90] = {};
+
+void y_move(int y_dis, int DIR, int speed)
+{
+	if (DIR == y_up)
+		PORTC = Y_UP;
+	if (DIR == y_down)
+		PORTC = Y_DOWN;
+	y_distance = y_dis;
+	TIMSK3 = 0x00;
+
+	OCR3A = speed;
+
+	TIMSK3 = 0x02;
+}
+void x_move(int x_dis, int DIR, int speed)
+{
+	//----------------------------- Dir change
+	if (DIR == x_left)
+		PORTC = X_LEFT;
+	if (DIR == x_right)
+		PORTC = X_RIGHT;
+	//----------------------------- Distance change
+	x_distance = x_dis;
+
+	TIMSK1 = 0x00;
+	OCR1A = speed;
+	//----------------------------- Enable Timer X
+	TIMSK1 = 0x02;
+}
+double current_x = 0;
+double current_y = 0;
+void reset()
+{
+	is_x_reset = 1;
+	is_y_reset = 1;
+	x_move(32000, x_left, 400);
+	y_move(32000, y_up, 400);
+	while (is_y_reset != 0 || is_x_reset != 0)
+		;
+	current_y = 0;
+	current_x = 0;
+}
+
+void goXLocation(double x, int speed)
+{
+	int dir = x_right;
+	if (current_x > x)
+		dir = x_left;
+	// Serial.print("X COUNT : ");
+	// Serial.print(current_x);
+	// Serial.print(" ? ");
+	// Serial.print(x);
+	// Serial.print("   ");
+	double distance = abs(current_x - x);
+	// Serial.print(distance);
+	distance /= 0.0125;
+	// Serial.print(" / ");
+	// Serial.println(distance);
+
+	int overed = (int)(distance + 0.5);
+	#if true
+	off_x += overed - distance;
+	Serial.println(off_x);
+	if(off_x >= 1){
+		int sum = (int)off_x;
+		off_x -= sum;
+		overed += sum;
+	}else if(off_x <= -1){
+		int sum = abs((int) off_x);
+		off_x += sum;
+		overed -= sum;
+	}
+	#endif
+	x_move(overed, dir, speed);
+	current_x = x;
+}
+void goYLocation(double y, int speed)
+{
+	int dir = y_down;
+	if (current_y > y)
+		dir = y_up;
+	// Serial.print("Y COUNT : ");
+	// Serial.print(current_y);
+	// Serial.print(" ? ");
+	// Serial.print(y);
+	// Serial.print("   ");
+	double distance = abs(current_y - y);
+	// Serial.print(distance);
+	distance /= 0.0125;
+	// Serial.print(" / ");
+	// Serial.println(distance);
+	int overed = (int)(distance + 0.5);
+	#if true
+	off_y += overed - distance;
+	Serial.println(off_y);
+	if(off_y >= 1){
+		int sum = (int)off_y;
+		off_y -= sum;
+		overed += sum;
+	}else if(off_y <= -1){
+		int sum = abs((int) off_y);
+		off_y += sum;
+		overed -= sum;
+	}
+	#endif
+	y_move(overed, dir, speed);
+	current_y = y;
+}
+
+void drawCircle(int radius)
+{
+	goXLocation(10 + radius, 400);
+	goYLocation(10 + radius, 400);
+	while (TIMSK1 != 0 || TIMSK3 != 0)
+		;
+	// X Location is change 1 to 50
+	// Y Location is change
+}
+
+void setup()
+{
+	Serial.begin(9600);
+	DDRC |= Y_DIR | Y_STEP;
+	DDRC &= ~Y_STOP;
+	DDRC |= X_DIR; // RIGHT DIRECTION
+	DDRD |= X_STEP | XYEENABLE;
+	DDRC &= ~(X_STOP);
+
+	//X LOC
+	TCCR1A = 0x00;
+	TCCR1B = 0X0a;
+	TCCR1C = 0x00;
+	OCR1A = 400;
+	TIMSK1 = 0x00;
+	//Y Loc
+	TCCR3A = 0x00;
+	TCCR3B = 0X0a;
+	TCCR3C = 0x00;
+	OCR3A = 400;
+	TIMSK3 = 0x00;
+
+	int radius = 50;
+	for (int i = 1; i <= 89; i++)
+	{
+		xs[i] = cos(ANGLE(i)) * radius;
+		ys[i] = sin(ANGLE(i)) * radius;
+
+		// Serial.print(i);
+		// Serial.print(" LOC : ");
+		// Serial.print(xs[i]);
+		// Serial.print(", ");
+		// Serial.println(ys[i]);
+	}
+	reset();
+	delay(1000);
+	double prev_x = xy_pos[0][0];
+	double prev_y = xy_pos[0][1];
+	double length_x = abs(prev_x);
+	double length_y = abs(prev_y);
+
+	int xspeed = 400;
+	int yspeed = 400;
+	
+	if(length_x > length_y){
+		xspeed = 400 * (length_y/length_x);
+	}else if(length_x < length_y){
+		yspeed = 400 *(length_x / length_y);
+	}
+
+	xy_speed[0][0] = (int)(xspeed + 0.5);
+	xy_speed[0][1] = (int)(yspeed + 0.5);
+	Serial.println(xspeed);
+	Serial.println(yspeed);
+	for(int i = 1; i < 205; i++){
+		double x = xy_pos[i][0];
+		double y = xy_pos[i][1];
+
+		double length_x = abs(prev_x - x);
+		double length_y = abs(prev_y - y);
+
+		int xspeed = 400;
+		int yspeed = 400;
+		if(length_x != 0 && length_y != 0){
+			if(length_x > length_y){
+				xspeed = 400 * (length_y/length_x);
+			}else if(length_x < length_y){
+				yspeed = 400 *(length_x / length_y);
+			}
+		}
+	
+		xy_speed[i][0] = (int)(xspeed + 0.5);
+		xy_speed[i][1] = (int)(yspeed + 0.5);
+
+		prev_x = x;
+		prev_y = y;
+		//  Serial.print(i);
+		// Serial.print(" LOC S: ");
+		// Serial.print(length_x);
+		// Serial.print(" ");
+		// Serial.print(xspeed);
+		// Serial.print(" ");
+		// Serial.print(prev_x);
+		// Serial.print(", ");
+		// Serial.print(length_y);
+		// Serial.print(" ");
+		// Serial.print(yspeed);
+		// Serial.print(" ");
+		// Serial.println(prev_y);
+	}
+		delay(1000);
+	for (int i = 0; i < 205; i++)
+	{
+		double x = xy_pos[i][0];
+		double y = xy_pos[i][1];
+		Serial.println(i);
+		goXLocation(x, xy_speed[i][0]);
+		goYLocation(y, xy_speed[i][1]);
+
+		while (TIMSK1 != 0 || TIMSK3 != 0);
+			
+		delay(200);
+	}
+	// goXLocation(96.74, 400);
+	// goYLocation(117.22, 400 * ( (96.74) / (117.22 - 0) ));
+	// Serial.println(400 * ((117.22 - 0) / (96.74) ));
+}
+void loop()
+{
+}
+int x_step_count = 0;
+char x_step_toggle = 0;
+ISR(TIMER1_COMPA_vect)
+{
+	if (x_step_toggle == 0)
+	{
+		x_step_toggle = 1;
+		PORTD |= X_STEP;
+	}
+	else
+	{
+		x_step_toggle = 0;
+		PORTD &= ~(X_STEP);
+		x_step_count++;
+		char x_limit_switch = PINC & X_STOP;
+		if (x_step_count >= x_distance)
+		{
+			is_x_reset = 0;
+			x_step_count = 0;
+			TIMSK1 = 0x00;
+		}
+		if (x_limit_switch && is_x_reset != -1)
+		{
+			TIMSK1 = 0;
+			x_step_count = 0;
+			if (is_x_reset == 1)
+			{
+				is_x_reset = -1;
+				x_move(ONE_CM * 5, x_right, 400);
+			}
+		}
+	}
+}
+
+int y_step_count = 0;
+char y_step_toggle = 0;
+ISR(TIMER3_COMPA_vect)
+{
+	if (y_step_toggle == 0)
+	{
+		y_step_toggle = 1;
+		PORTC |= Y_STEP;
+	}
+	else
+	{
+		y_step_toggle = 0;
+		PORTC &= ~(Y_STEP);
+		y_step_count++;
+		char y_limit_switch = PINC & Y_STOP;
+		if (y_step_count >= y_distance)
+		{
+			is_y_reset = 0;
+			y_step_count = 0;
+			TIMSK3 = 0x00;
+		}
+		if (y_limit_switch && is_y_reset != -1)
+		{
+			TIMSK3 = 0;
+			y_step_count = 0;
+			if (is_y_reset == 1)
+			{
+				is_y_reset = -1;
+				y_move(ONE_CM * 5, y_down, 400);
+			}
+		}
+	}
+}

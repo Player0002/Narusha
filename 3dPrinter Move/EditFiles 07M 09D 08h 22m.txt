@@ -1,0 +1,246 @@
+
+#define X_DIR 0x20     // C
+#define X_STEP 0x80    //D
+#define X_STOP 0x04    // C
+#define XYEENABLE 0x40 // D
+
+#define Y_DIR 0x80  // DDRC 0x80
+#define Y_STEP 0x40 //DDRC 0x40
+#define Y_STOP 0x08 // DDRC 0x08
+
+#define ONE_MM 80
+#define ONE_CM 800
+
+#define X_LEFT PORTC | X_DIR
+#define X_RIGHT PORTC & ~(X_DIR)
+
+#define Y_UP PORTC | Y_DIR
+#define Y_DOWN PORTC & ~(Y_DIR)
+
+#define BASESPEED 800
+
+enum
+{
+  x_left,
+  x_right,
+  y_up,
+  y_down
+};
+
+volatile char is_x_reset = 0;
+int x_distance = 0;
+
+volatile char is_y_reset = 0;
+int y_distance = 0;
+
+double off_y = 0;
+double off_x = 0;
+
+double ANGLE(int x)
+{
+  return (PI * x) / 180.0;
+}
+
+void y_move(int y_dis, int DIR, int speed)
+{
+  if (DIR == y_up)
+    PORTC = Y_UP;
+  if (DIR == y_down)
+    PORTC = Y_DOWN;
+  y_distance = y_dis;
+  TIMSK3 = 0x00;
+  OCR3A = speed;
+  TIMSK3 = 0x02;
+}
+void x_move(int x_dis, int DIR, int speed)
+{
+  //----------------------------- Dir change
+  if (DIR == x_left)
+    PORTC = X_LEFT;
+  if (DIR == x_right)
+    PORTC = X_RIGHT;
+  //----------------------------- Distance change
+  x_distance = x_dis;
+  TIMSK1 = 0x00;
+  OCR1A = speed;
+  //----------------------------- Enable Timer X
+  TIMSK1 = 0x02;
+}
+void reset()
+{
+  is_x_reset = 1;
+  is_y_reset = 1;
+  x_move(32000, x_left, BASESPEED);
+  y_move(32000, y_up, BASESPEED);
+  while (is_y_reset != 0 || is_x_reset != 0)
+    ;
+}
+
+void goXLocation(double px, double x, int speed)
+{
+  int dir = x_right;
+  if (px - x > 0)
+    dir = x_left;
+  else if(px - x < 0) dir = x_right;
+  else if(px - x == 0) return;
+
+  double distance = abs(px - x);
+  distance /= 0.0125;
+
+  int overed = (int)(distance + 0.5);
+#if true
+  off_x += overed - distance;
+  if (off_x > 0)
+  {
+    int sum = (int)off_x;
+    off_x -= sum;
+    overed -= sum;
+  }
+  else if (off_x < 0)
+  {
+    int sum = abs((int)off_x);
+    off_x += sum;
+    overed += sum;
+  }
+#endif
+
+  x_move(overed, dir, speed);
+}
+void goYLocation(double py, double y, int speed)
+{
+  int dir = y_down;
+  if (py -y> 0)
+    dir = y_up;
+  else if(py - y == 0) return;
+  double amount = abs(py - y);
+  double distance = amount;
+  distance /= 0.0125;
+  int overed = (int)(distance + 0.5);
+#if true
+  off_y += overed - distance;
+  if (off_y > 0)
+  {
+    int sum = (int)off_y;
+    off_y -= sum;
+    overed -= sum;
+  }
+  else if (off_y < 0)
+  {
+    int sum = abs((int)off_y);
+    off_y += sum;
+    overed += sum;
+  }
+#endif
+
+  y_move(overed, dir, speed);
+}
+
+
+void drawLine(double x1, double x2, double y1, double y2){
+  double lenx = abs(x1 - x2);
+  double leny = abs(y1 - y2);
+
+  int xspeed = 0;
+  int yspeed = 0;
+
+  if(lenx != 0 && leny != 0){
+      xspeed = (int)(BASESPEED  * (1 / sin(atan2(lenx,leny))));
+      yspeed = (int)(BASESPEED  * (1 / cos(atan2(lenx,leny))));
+      goXLocation(x1, x2, xspeed);
+      goYLocation(y1, y2, yspeed);
+  }else if(lenx == 0){
+    goYLocation(y1, y2, BASESPEED);
+  }else if(leny == 0){
+    goXLocation(x1, x2, BASESPEED);
+  }
+
+}
+
+void setup()
+{
+  DDRC |= Y_DIR | Y_STEP;
+  DDRC &= ~Y_STOP;
+  DDRC |= X_DIR; // RIGHT DIRECTION
+  DDRD |= X_STEP | XYEENABLE;
+  DDRC &= ~(X_STOP);
+
+
+  //X LOC
+  TCCR1A = 0x00;
+  TCCR1B = 0X0a;
+  TCCR1C = 0x00;
+  OCR1A = BASESPEED;
+  TIMSK1 = 0x00;
+  //Y Loc
+  TCCR3A = 0x00;
+  TCCR3B = 0X0a;
+  TCCR3C = 0x00;
+  OCR3A = BASESPEED;
+  TIMSK3 = 0x00;
+  int spd = 200;
+  drawLine(0, 43.3, 0, 0);
+  while (TIMSK1 != 0 || TIMSK3 != 0);
+  drawLine(0, 0, 0, 25);
+  while (TIMSK1 != 0 || TIMSK3 != 0);
+  drawLine(43.3, 0, 25, 0);
+  while (TIMSK1 != 0 || TIMSK3 != 0);
+
+}
+void loop()
+{
+}
+volatile int x_step_count = 0;
+volatile char x_step_toggle = 0;
+ISR(TIMER1_COMPA_vect)
+{
+  if (x_step_toggle == 0)
+  {
+    x_step_toggle = 1;
+    PORTD |= X_STEP;
+  }
+  else
+  {
+    x_step_toggle = 0;
+    PORTD &= ~(X_STEP);
+    x_step_count++;
+    char x_limit_switch = PINC & X_STOP;
+    if (x_step_count >= x_distance)
+    {
+      x_step_count = 0;
+      TIMSK1 = 0x00;
+    }
+    if (x_limit_switch)
+    {
+      x_step_count = 0;
+      TIMSK1 = 0;
+    }
+  }
+}
+
+volatile int y_step_count = 0;
+volatile char y_step_toggle = 0;
+ISR(TIMER3_COMPA_vect)
+{
+  if (y_step_toggle == 0)
+  {
+    y_step_toggle = 1;
+    PORTC |= Y_STEP;
+  }
+  else
+  {
+    y_step_toggle = 0;
+    PORTC &= ~(Y_STEP);
+    y_step_count++;
+    char y_limit_switch = PINC & Y_STOP;
+    if (y_step_count >= y_distance)
+    {
+      y_step_count = 0;
+      TIMSK3 = 0x00;
+    }
+    if (y_limit_switch)
+    {
+      y_step_count = 0;
+      TIMSK3 = 0;
+    }
+  }
+}

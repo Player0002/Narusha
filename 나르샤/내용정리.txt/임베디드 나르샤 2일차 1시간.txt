@@ -1,0 +1,26 @@
+왼쪽 USB , 오른쪽 UNO CPU
+AI......
+ARM에서는 PCU 내부의 메모리를 건들여가면서 진행
+
+포인터개념 **
+
+16MHz / Timer (T/1024 등..) -> 단위 Hz , 주기 - 1 / N  
+0.000064 s
+
+PB5 --> 
+
+	
+
+SIGNAL(INTO_vect){
+}
+SIGNAL(INT4_vect){
+}
+
+SIGNAL(TIMERO_OVF_vect){
+}
+SIGNAL(TIMER2_OVF_vect){
+}
+SIGNAL(TIMER0_COMP_vect){
+}
+SIGNAL(TIMER2_COMPA_vect){
+}

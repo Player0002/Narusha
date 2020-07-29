@@ -1,0 +1,167 @@
+#include <Arduino.h>
+
+#define X_DIR 0x20 // C 
+#define X_STEP 0x80 //D
+#define X_STOP 0x04 // C
+#define XYEENABLE 0x40 // D
+
+#define Y_DIR 0x80 // DDRC 0x80
+#define Y_STEP 0x40 //DDRC 0x40
+#define Y_STOP 0x08 // DDRC 0x08
+
+#define ONE_MM 80
+#define ONE_CM 800
+
+#define X_LEFT PORTC | X_DIR
+#define X_RIGHT PORTC & ~(X_DIR)
+
+#define Y_UP PORTC | Y_DIR
+#define Y_DOWN PORTC & ~(Y_DIR)
+
+enum{
+	x_left, x_right, y_up, y_down
+};
+
+
+volatile char is_x_reset = 0;
+int x_distance = 0;
+
+volatile char is_y_reset = 0;
+int y_distance = 0;
+
+double ANGLE(int x){
+  return PI * (x / 180.0);
+}
+
+
+void y_move(int y_dis, int DIR, int speed){
+	if(DIR == y_up) PORTC = Y_UP;
+	if(DIR == y_down) PORTC = Y_DOWN;
+	y_distance = y_dis;
+  TIMSK3 = 0x00;
+
+  OCR3A = speed;
+
+	TIMSK3 = 0x02;
+}
+void x_move(int x_dis, int DIR, int speed){
+	//----------------------------- Dir change
+	if(DIR == x_left) PORTC = X_LEFT;
+	if(DIR == x_right) PORTC = X_RIGHT;
+  //----------------------------- Distance change 
+  x_distance = x_dis;
+
+  TIMSK1 = 0x00;
+  OCR1A = speed;
+	//----------------------------- Enable Timer X
+	TIMSK1 = 0x02;
+}
+int current_x = 0;
+int current_y = 0;
+void reset(){
+	is_x_reset = 1;
+	is_y_reset = 1;
+	x_move(32000, x_left, 400);
+	y_move(32000, y_up, 400);
+	while(is_y_reset != 0 || is_x_reset != 0);
+	current_y = 0;
+	current_x = 0;
+}
+
+void goXLocation(int x, int speed){
+	int dir = x_right;
+	if(current_x > x) dir = x_left;
+	x_move(abs(current_x - x) * ONE_MM, dir, speed);
+	current_x = x;
+}
+void goYLocation(int y, int speed){
+	int dir = y_down;
+	if(current_y > y) dir = y_up;
+
+	y_move(abs(current_y - y) * ONE_MM, dir, speed);
+	current_y = y;
+}
+void setup(){
+	DDRC |= Y_DIR | Y_STEP;
+	DDRC &= ~Y_STOP; 
+	DDRC |= X_DIR; // RIGHT DIRECTION
+	DDRD |= X_STEP | XYEENABLE;
+	DDRC &= ~(X_STOP);
+
+	//X LOC
+	TCCR1A = 0x00;
+	TCCR1B = 0X0a;
+	TCCR1C = 0x00;
+	OCR1A = 400;
+	TIMSK1 = 0x00;
+	//Y Loc
+	TCCR3A = 0x00;
+	TCCR3B = 0X0a;
+	TCCR3C = 0x00;
+	OCR3A = 400;
+	TIMSK3 = 0x00;
+
+	reset();
+
+	goXLocation(50 * cos(ANGLE(30)), 400);
+	while(TIMSK1 != 0x00);
+	goYLocation(25, 400);
+	while(TIMSK3 != 0x00);
+	goXLocation(0, (int)(400 * tan(ANGLE(30)) + 0.5));
+	goYLocation(0, 400);
+}
+void loop(){
+}
+int x_step_count = 0;
+char x_step_toggle = 0;
+ISR(TIMER1_COMPA_vect){
+	if(x_step_toggle == 0){
+		x_step_toggle = 1;
+		PORTD |= X_STEP;
+	}else{
+		x_step_toggle = 0;
+		PORTD &= ~(X_STEP);
+		x_step_count ++;
+		char x_limit_switch = PINC & X_STOP;
+		if(x_step_count >= x_distance) {
+      		is_x_reset = 0;
+			x_step_count = 0;
+			TIMSK1 = 0x00;
+		}
+		if(x_limit_switch && is_x_reset != -1){
+			TIMSK1 = 0;
+      		x_step_count = 0;
+			if(is_x_reset==1){
+				is_x_reset = -1;
+				x_move(ONE_CM * 5, x_right, 400);
+			}
+		}
+	}
+}
+
+int y_step_count = 0;
+char y_step_toggle = 0;
+ISR(TIMER3_COMPA_vect){
+if(y_step_toggle == 0){
+		y_step_toggle = 1;
+		PORTC |= Y_STEP;
+	}else{
+		y_step_toggle = 0;
+		PORTC &= ~(Y_STEP);
+		y_step_count ++;
+		char y_limit_switch = PINC & Y_STOP;
+		if(y_step_count >= y_distance) {
+			is_y_reset = 0;
+			y_step_count = 0;
+			TIMSK3 = 0x00;
+		}
+		if(y_limit_switch && is_y_reset != -1){
+			TIMSK3 = 0;
+			y_step_count = 0;
+			if(is_y_reset == 1){
+				is_y_reset = -1;
+				y_move(ONE_CM * 5, y_down, 400);
+			}
+		}
+	}
+}
