@@ -1,0 +1,292 @@
+#include <stdio.h>
+#define MAX 100
+#define BASE_SPEED 800
+#define DEBUG 0
+//------------------------------------------ Str Queue
+int str_rear;
+int str_front;
+
+char str_queue[MAX];
+
+int str_is_full() {
+    return ((str_rear +1)%MAX) == str_front;
+}
+int str_is_empty() {
+    return str_rear == str_front;
+}
+int str_enqueue(char c) {
+    if (str_is_full()) {
+        return -1;
+    }
+    str_rear = (str_rear + 1) % MAX;
+    str_queue[str_rear] = c;
+    return 1;
+}
+
+char str_dequeue() {
+    if (str_is_empty()) {
+        return -1;
+    }
+    str_front = (str_front + 1) % MAX;
+    return str_queue[str_front];
+}
+//---------------------------------------------- Pos Queue
+typedef struct { // for save position
+    double x;
+    double y;
+    int x_speed;
+    int y_speed;
+}Pos;
+
+int pos_rear;
+int pos_front;
+
+Pos pos_queue[MAX];
+
+int pos_is_full() {
+    return ((pos_rear + 1) % MAX) == pos_front;
+}
+int pos_is_empty() {
+    return pos_rear == pos_front;
+}
+int pos_enqueue(Pos pos) {
+    if (pos_is_full()) {
+        return -1;
+    }
+    pos_rear = (pos_rear + 1) % MAX;
+    pos_queue[pos_rear].x = pos.x;
+    pos_queue[pos_rear].y = pos.y;
+    pos_queue[pos_rear].x_speed = pos.x_speed;
+    pos_queue[pos_rear].y_speed = pos.y_speed;
+    return 1;
+}
+Pos pos_dequeue() {
+    if (pos_is_empty()) {
+        return Pos{ -1,-1,-1, -1 };
+    }
+    pos_front = (pos_front + 1) % MAX;
+    return pos_queue[pos_front];
+}
+
+
+FILE* fp;
+
+long int index = 0;
+
+char is_ended = 0;
+
+void fileManagement() {
+    if (fp != NULL) fclose(fp);
+
+    fp = fopen("C:\\Users\\KYJ\\Desktop\\test.txt", "r");
+    
+    fseek(fp, index, SEEK_SET); // set position to first
+
+    char c = fgetc(fp);
+    index = ftell(fp); // Save current position
+    if (c == EOF) fclose(fp); // END
+    
+
+    int enqueue = str_enqueue(c);
+    //If Failed to enqueue ( Queue is full )
+    if (enqueue == -1) {
+        index--;
+        fclose(fp);
+        return;
+    }
+
+    fclose(fp); // Close File
+}
+
+double previous_x = 0;
+double previous_y = 0;
+
+
+double result_x = 0; // Save data
+double result_y = 0; 
+
+int result_speed = 0;
+
+int default_speed = 0;
+
+int num_front = 0;
+int num_backward = 0;
+
+char required_backward = 0;
+
+char current_inst = 0;
+
+char inst_num = 0;
+
+char repeat_enqueue = 0;
+char required_skip = 0;
+
+int* calculate_speed(double px, double py, double x, double y);
+int is_inst(char value);
+double abs(double a);
+void outData() {
+    char c = str_dequeue();
+
+    if (c!= '\n' && required_skip) return;
+
+    if (c == ';') {
+        required_skip = 1;
+        return;
+    }
+    // Save decoded data
+    if (c == '\n' || repeat_enqueue == 1) { // end of line
+        
+        if (required_skip == 1) {
+            required_skip = 0;
+            return;
+        }
+        
+        int* speed = calculate_speed(previous_x, previous_y, result_x, result_y);
+        Pos pos{ result_x, result_y, speed[0], speed[1] };
+        int enqueue = pos_enqueue(pos);
+        if (enqueue == -1) {
+            repeat_enqueue = 1;
+            return;
+        }
+        //printf("X : %.3f Y : %.3f x_Speed : %d y_Speed : %d\n", pos.x, pos.y, pos.x_speed, pos.y_speed);
+        previous_x = result_x;
+        previous_y = result_y;
+        repeat_enqueue = 0;
+        result_x = 0;
+        result_y = 0;
+
+         num_front = 0;
+         num_backward = 0;
+        return;
+    }
+    //If Queue is full
+    if (c == -1) {
+        if (is_ended == 0) {
+            is_ended = 1;
+            printf("Queue is Empty!\n");
+            return;
+        }
+    }
+
+    if (c == ' ') { // end instruction
+        required_backward = 0;
+
+        //save x y 
+        if (current_inst == 'X') {
+            num_front /= 10;
+            num_backward /= 10;
+            result_x = num_front + (num_backward / 1000.0);
+            num_front = 0;
+            num_backward = 0;
+            if (DEBUG) printf("End X Parsing : %.3f\n", result_x);
+        }
+        else if (current_inst == 'Y') {
+            num_front /= 10;
+            num_backward /= 10;
+            result_y = num_front + (num_backward / 1000.0);
+            num_front = 0;
+            num_backward = 0;
+            if (DEBUG) printf("End Y Parsing : %.3f\n", result_y);
+        }
+        else if (current_inst == 'G') {
+            inst_num /= 10;
+        }
+        else if (current_inst == 'F') {
+            result_speed /= 10;
+        }
+        //reset inst
+        current_inst = 0;
+    }
+
+    //check is instruction
+    if (is_inst(c)) {
+        current_inst = c;
+        if (DEBUG) printf("Change Instruction %c\n", c);
+        return;
+    }
+
+
+    if (current_inst == 'G') {
+        inst_num += c - '0';
+        inst_num *= 10;
+        return;
+    }
+    else if (current_inst == 'X' || current_inst == 'Y' || current_inst == 'E') {
+        if (c == '.') {
+            required_backward = 1;
+            return;
+        }
+        if (!required_backward) {
+            num_front += c - '0';
+            num_front *= 10;
+            if(DEBUG) printf("Add num front : %d Current Char : %c\n", num_front, c);
+        }
+        else {
+            num_backward += c - '0';
+            num_backward *= 10;
+            if (DEBUG) printf("Add num backward : %d Current Char : %c\n", num_backward, c);
+        }
+    }
+    else if (current_inst == 'F') {
+        result_speed += c - '0';
+        result_speed *= 10;
+    }
+    
+
+    
+}
+int is_inst(char value) {
+    return value == 'G' || value == 'X' || value == 'Y' || value =='E' || value =='F';
+}
+double abs(double a) {
+    return a < 0 ? a * -1 : a;
+}
+int* calculate_speed(double px, double py, double x, double y) { // return value like {200, 500}
+    double length_x = abs(px - x);
+    double length_y = abs(py - y);
+
+    int x_speed = BASE_SPEED; // Base speed;
+    int y_speed = BASE_SPEED;
+
+    if (length_x != 0 && length_y != 0) {
+        if (length_x > length_y)
+        {
+            x_speed = BASE_SPEED * (length_y / length_x);
+            if (x_speed < 200) {
+                x_speed = BASE_SPEED;
+                y_speed = BASE_SPEED * (length_x / length_y);
+            }
+        }
+        else if (length_x < length_y)
+        {
+            y_speed = BASE_SPEED * (length_x / length_y);
+            if (y_speed < 200) {
+                y_speed = BASE_SPEED;
+                x_speed = BASE_SPEED * (length_y / length_x);
+            }
+        }
+    }
+    int speeds[2] = { (int)(x_speed + 0.5), (int)(y_speed + 0.5) };
+    return speeds;
+}
+
+void dequeue_data() {
+    Pos pos = pos_dequeue();
+    if (pos.x == -1 && pos.y == -1) {
+        return;
+    }
+    printf("X : %.3f Y : %.3f x_Speed : %d y_Speed : %d\n", pos.x, pos.y, pos.x_speed, pos.y_speed);
+}
+
+int main() {
+
+    while (true) { // Arduino loop
+        fileManagement();
+        outData();
+        dequeue_data();
+    }
+
+
+    return 0;
+
+}
